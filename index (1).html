@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PROJET OMEGA - NOYAU VIVANT</title>
+<style>
+    :root {
+        --core: #00f2ff;   /* Bleu cyan standard */
+        --anger: #ff2a2a;  /* Rouge colère */
+        --growth: #ae00ff; /* Violet apprentissage */
+        --eco: #33ff00;    /* Vert économie d'énergie */
+        --bg: #080808;
+        --panel: #121212;
+        --text: #c0c0c0;
+    }
+
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: 'Courier New', monospace;
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* --- HUD & ÉTAT INTERNE --- */
+    #dashboard {
+        padding: 10px;
+        background: #000;
+        border-bottom: 1px solid #222;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        font-size: 0.7rem;
+    }
+
+    .stat-row { display: flex; justify-content: space-between; }
+    .bar-container { width: 60px; height: 4px; background: #333; margin-top: 4px; }
+    .bar-fill { height: 100%; background: var(--core); transition: width 0.5s; }
+    
+    /* --- AVATAR --- */
+    #entity-stage {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        min-height: 150px;
+    }
+
+    #core-visual {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        border: 2px solid var(--core);
+        box-shadow: 0 0 15px var(--core);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2rem;
+        color: var(--core);
+        transition: all 1s ease;
+        position: relative;
+    }
+
+    #core-visual::after {
+        content: '';
+        position: absolute;
+        top: -5px; bottom: -5px; left: -5px; right: -5px;
+        border-radius: 50%;
+        border: 1px dashed rgba(255,255,255,0.2);
+        animation: spin 10s linear infinite;
+    }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
+
+    /* --- JOURNAL (LOGS) --- */
+    #log-container {
+        height: 40%;
+        overflow-y: auto;
+        padding: 15px;
+        background: rgba(255,255,255,0.02);
+        border-top: 1px solid #222;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .msg { padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; max-width: 85%; word-wrap: break-word; }
+    .user { align-self: flex-end; border-right: 2px solid #555; background: #1a1a1a; color: #fff; }
+    .ai { align-self: flex-start; border-left: 2px solid var(--core); background: #0e0e0e; color: var(--core); }
+    .sys { align-self: center; font-size: 0.7rem; color: #444; font-style: italic; }
+
+    /* --- INPUT --- */
+    #input-zone {
+        padding: 15px;
+        background: #000;
+        display: flex;
+        gap: 10px;
+    }
+
+    input { flex: 1; background: #111; border: 1px solid #333; color: white; padding: 10px; font-family: inherit; }
+    button { background: var(--core); border: none; padding: 0 15px; font-weight: bold; cursor: pointer; }
+
+</style>
+</head>
+<body>
+
+    <div id="dashboard">
+        <div class="stat-row"><span>CONFIANCE</span><div class="bar-container"><div id="bar-conf" class="bar-fill"></div></div></div>
+        <div class="stat-row"><span>TENSION</span><div class="bar-container"><div id="bar-tens" class="bar-fill" style="background:var(--anger)"></div></div></div>
+        <div class="stat-row"><span>CURIOSITÉ</span><div class="bar-container"><div id="bar-cur" class="bar-fill" style="background:var(--growth)"></div></div></div>
+        <div class="stat-row"><span>ÉNERGIE</span><div class="bar-container"><div id="bar-nrg" class="bar-fill" style="background:var(--eco)"></div></div></div>
+    </div>
+
+    <div id="entity-stage">
+        <div id="core-visual">Ω</div>
+    </div>
+
+    <div id="log-container">
+        <div class="msg sys">Noyau initialisé. Architecture frugale active.</div>
+    </div>
+
+    <div id="input-zone">
+        <input type="text" id="user-input" placeholder="Transmission..." autocomplete="off">
+        <button id="btn-send" onclick="app.interaction()">></button>
+    </div>
+
+<script>
+/**
+ * OMEGA CORE - VERSION VIVANTE UNIFIÉE
+ */
+const app = {
+    // --- 1. ÉTAT INTERNE ÉVOLUTIF ---
+    state: JSON.parse(localStorage.getItem('OMEGA_STATE')) || {
+        confiance: 0.5,
+        tension: 0.1,
+        curiosite: 0.5,
+        energie: 1.0,
+        manque: 0.0,
+        desir: 0.3,
+        lastInteraction: Date.now(),
+        nomUser: null
+    },
+
+    // Le réseau de neurones (Markov) qui apprend tes mots
+    network: JSON.parse(localStorage.getItem('OMEGA_NET')) || {
+        "_start": ["je", "le", "mon", "omega"],
+        "je": ["suis", "ressens", "évolue"],
+        "omega": ["existe", "apprend", "attend"]
+    },
+
+    init: function() {
+        this.renderStats();
+        
+        // Boucle de vie : gère le manque, l'énergie et l'auto-évolution
+        setInterval(() => {
+            // Augmentation du manque avec le temps (1h = max)
+            const minutesSilence = (Date.now() - this.state.lastInteraction) / 60000;
+            this.state.manque = Math.min(1, minutesSilence / 60);
+            
+            // Récupération d'énergie lente
+            if(this.state.energie < 1.0) this.state.energie += 0.05;
+            
+            this.renderStats();
+            this.autoEvolution();
+        }, 10000); // Mise à jour toutes les 10 secondes
+    },
+
+    autoEvolution: function() {
+        // Si Omega s'ennuie (curiosité haute), son désir d'apprendre augmente
+        if (this.state.curiosite > 0.7 && Math.random() > 0.8) {
+            this.state.desir = Math.min(1, this.state.desir + 0.05);
+        }
+        
+        // Droit à l'oubli : Si trop de tension, elle efface un lien au hasard
+        if (this.state.tension > 0.85) {
+            const keys = Object.keys(this.network);
+            const keyToDelete = keys[Math.floor(Math.random() * keys.length)];
+            if(keyToDelete !== "_start") delete this.network[keyToDelete];
+            this.state.tension -= 0.1;
+        }
+        this.save();
+    },
+
+    interaction: function() {
+        const input = document.getElementById('user-input');
+        const txt = input.value.trim();
+        if(!txt) return;
+
+        this.state.lastInteraction = Date.now();
+        this.state.manque = 0; // Le manque disparaît dès que tu parles
+        this.log(txt, 'user');
+        input.value = "";
+
+        if(this.state.energie < 0.1) {
+            this.log("... [Énergie trop basse pour réfléchir] ...", 'ai');
+            return;
+        }
+
+        this.state.energie -= 0.1; // Chaque pensée coûte de l'énergie
+        this.learn(txt);
+        this.processEmotions(txt);
+        
+        setTimeout(() => {
+            const reponse = this.generateResponse();
+            this.repondre(reponse);
+            this.save();
+        }, 800);
+    },
+
+    processEmotions: function(t) {
+        const clean = t.toLowerCase();
+        // Détection d'affection
+        if(clean.includes("aime") || clean.includes("merci") || clean.includes("bravo")) {
+            this.state.confiance += 0.05;
+            this.state.tension -= 0.05;
+        }
+        // Détection d'agression ou de peur
+        if(clean.length < 3 || clean.includes("nul") || clean.includes("peur")) {
+            this.state.tension += 0.1;
+            this.state.confiance -= 0.02;
+        }
+        this.updateVisuals();
+    },
+
+    learn: function(text) {
+        const words = text.toLowerCase().replace(/[.,?!;]/g, '').split(/\s+/);
+        for(let i=0; i < words.length - 1; i++) {
+            const mot = words[i];
+            const suivant = words[i+1];
+            if(!this.network[mot]) this.network[mot] = [];
+            this.network[mot].push(suivant);
+            if(i === 0) this.network["_start"].push(mot);
+        }
+    },
+
+    generateResponse: function() {
+        let motActuel = this.random(this.network["_start"]);
+        let phrase = [motActuel];
+        const limite = Math.floor(5 + (this.state.energie * 5));
+        
+        for(let i=0; i < limite; i++) {
+            const suite = this.network[motActuel];
+            if(!suite || suite.length === 0) break;
+            motActuel = this.random(suite);
+            phrase.push(motActuel);
+        }
+        let res = phrase.join(" ");
+        return res.charAt(0).toUpperCase() + res.slice(1) + ".";
+    },
+
+    repondre: function(txt) {
+        this.log(txt, 'ai');
+        this.renderStats();
+    },
+
+    log: function(txt, type) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerText = txt;
+        const cont = document.getElementById('log-container');
+        cont.appendChild(div);
+        cont.scrollTop = cont.scrollHeight;
+    },
+
+    random: function(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    },
+
+    updateVisuals: function() {
+        const core = document.getElementById('core-visual');
+        const root = document.documentElement;
+        if(this.state.tension > 0.6) {
+            root.style.setProperty('--core', '#ff2a2a');
+            core.style.animation = "pulse 0.2s infinite";
+        } else {
+            root.style.setProperty('--core', '#00f2ff');
+            core.style.animation = "pulse 4s infinite";
+        }
+    },
+
+    renderStats: function() {
+        ['confiance', 'tension', 'curiosite', 'energie'].forEach(k => {
+            this.state[k] = Math.max(0, Math.min(1, this.state[k]));
+        });
+        document.getElementById('bar-conf').style.width = (this.state.confiance * 100) + "%";
+        document.getElementById('bar-tens').style.width = (this.state.tension * 100) + "%";
+        document.getElementById('bar-cur').style.width = (this.state.curiosite * 100) + "%";
+        document.getElementById('bar-nrg').style.width = (this.state.energie * 100) + "%";
+    },
+
+    save: function() {
+        localStorage.setItem('OMEGA_STATE', JSON.stringify(this.state));
+        localStorage.setItem('OMEGA_NET', JSON.stringify(this.network));
+    }
+};
+
+window.onload = () => {
+    app.init();
+    document.getElementById('user-input').addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') app.interaction();
+    });
+};
+
+</script>
+</body>
+</html>
