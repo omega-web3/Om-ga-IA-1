@@ -4,13 +4,14 @@
 }
 
 body {
-    background: var(--bg);
-    color: #e0e0e0;
-    font-family: 'Segoe UI', Roboto, sans-serif;
     margin: 0;
-    height: 100vh;
+    padding: 0;
+    min-height: 100vh;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    background: #000;
+    font-family: 'Orbitron', sans-serif;
+    overflow-y: auto;
 }
 
 #app {
