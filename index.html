@@ -188,31 +188,32 @@ const app = {
         this.save();
     },
 
-    interaction: function() {
-        const input = document.getElementById('user-input');
-        const txt = input.value.trim();
-        if(!txt) return;
+    async interaction() {
+    const input = document.getElementById('user-input');
+    const txt = input.value.trim();
+    if(!txt) return;
 
-        this.state.lastInteraction = Date.now();
-        this.state.manque = 0; // Le manque disparaît dès que tu parles
-        this.log(txt, 'user');
-        input.value = "";
+    this.state.lastInteraction = Date.now();
+    this.state.manque = 0;
+    this.log(txt, 'user');
+    input.value = "";
 
-        if(this.state.energie < 0.1) {
-            this.log("... [Énergie trop basse pour réfléchir] ...", 'ai');
-            return;
-        }
-
-        this.state.energie -= 0.1; // Chaque pensée coûte de l'énergie
-        this.learn(txt);
-        this.processEmotions(txt);
+    // Appel à ton API sécurisée
+    try {
+        const response = await fetch('https://omega-api-l220.onrender.com', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: txt })
+        });
         
-        setTimeout(() => {
-            const reponse = this.generateResponse();
-            this.repondre(reponse);
-            this.save();
-        }, 800);
-    },
+        const data = await response.json();
+        this.log(data.reply || "Erreur", 'ai');
+    } catch(e) {
+        this.log("Connexion impossible", 'ai');
+    }
+    
+    this.save();
+},
 
     processEmotions: function(t) {
         const clean = t.toLowerCase();
